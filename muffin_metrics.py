@@ -32,13 +32,13 @@ class Plugin(BasePlugin):
         """ Initialize Metrics Client. """
         super().setup(app)
 
-        self.enabled = len(self.options.backends)
+        self.enabled = len(self.cfg.backends)
 
-        self.default = self.options.default
-        if not self.options.default and self.enabled:
-            self.default = self.options.backends[0][0]
+        self.default = self.cfg.default
+        if not self.cfg.default and self.enabled:
+            self.default = self.cfg.backends[0][0]
 
-        self.backends_hash = {name: parse.urlparse(loc) for (name, loc) in self.options.backends}
+        self.backends_hash = {name: parse.urlparse(loc) for (name, loc) in self.cfg.backends}
         if self.default not in self.backends_hash:
             raise PluginException('Backend not found: %s' % self.default)
 
@@ -60,10 +60,7 @@ class Plugin(BasePlugin):
         client = yield from self.client(backend)
         if not client:
             return False
-        client.send(*[
-            message.encode('ascii') if isinstance(message, str) else message
-            for message in messages
-        ], path=path)
+        client.send(*messages, path=path)
         client.disconnect()
 
 
@@ -75,8 +72,8 @@ class UDPClient:
         """ Parse location. """
         self.parent = plugin
         self.prefix = b''
-        if plugin.options.prefix:
-            self.prefix = plugin.options.prefix.encode('ascii')
+        if plugin.cfg.prefix:
+            self.prefix = plugin.cfg.prefix.encode('ascii')
         self.hostname = hostname
         self.port = port
         self.transport = self.connected = None
@@ -135,7 +132,7 @@ class UDPClient:
         data = b''
         while messages:
             message = messages.pop(0)
-            if len(data + message) + 1 > self.parent.options.maxudpsize:
+            if len(data + message) + 1 > self.parent.cfg.maxudpsize:
                 self.transport.sendto(data)
                 data = b''
 
@@ -156,7 +153,7 @@ class TCPClient(UDPClient):
             _, self.transport = yield from asyncio.open_connection(
                 self.hostname, self.port, loop=self.parent.app.loop)
         except OSError:
-            if self.parent.options.fail_silently:
+            if self.parent.cfg.fail_silently:
                 return False
             raise
         return self

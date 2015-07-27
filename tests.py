@@ -68,5 +68,5 @@ def test_transport(app, client):
 
     assert not client.pipeline
 
-    app.ps.metrics.options.fail_silently = True
+    object.__setattr__(app.ps.metrics.cfg, 'fail_silently', True)
     yield from app.ps.metrics.send(21, path='test.measure', backend='tcp')
