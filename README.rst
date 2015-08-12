@@ -3,7 +3,7 @@ Muffin-Metrics
 
 .. _description:
 
-Muffin-Metrics -- Send data to Graphite from Muffin application.
+Muffin-Metrics -- Send data to Graphite/StatsD from Muffin application.
 
 .. _badges:
 
@@ -56,6 +56,8 @@ Options
     METRICS_BACKENDS = (
         ('udp': 'udp://address:port'),
         ('tcp': 'tcp://address:port'),
+        ('statsd_udp': 'udp+statsd://address:port'),
+        ('statsd_tcp': 'tcp+statsd://address:port'),
     )
     METRICS_DEFAULT = 'udp'
 
@@ -86,8 +88,14 @@ Usage
 
         # Create client and send data
         metrics = yield from app.ps.metrics.client(backend='tcp')
-        metrics.send(24, path='twenty.four')
+        metrics.send('twenty.four', 24)
         metrics.disconnect()
+
+        # Send data to statsd
+        with (yield from app.ps.metrics.client(backend='statsd_tcp')) as client:
+            client.incr('request.method.%s' % request.method)
+            client.timing('response.time', timer.ms)
+            client.incr('response.status.%s' % response.status)
 
 
 .. _bugtracker:
