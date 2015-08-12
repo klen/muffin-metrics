@@ -10,7 +10,7 @@ from muffin.plugins import BasePlugin, PluginException
 # Package information
 # ===================
 
-__version__ = "0.0.3"
+__version__ = "0.1.0"
 __project__ = "muffin-metrics"
 __author__ = "Kirill Klenov <horneds@gmail.com>"
 __license__ = "MIT"
