@@ -4,6 +4,7 @@ from time import time
 from urllib import parse
 from random import random
 
+from muffin import HTTPException
 from muffin.plugins import BasePlugin, PluginException
 
 
@@ -18,19 +19,34 @@ __license__ = "MIT"
 
 @coroutine
 def statsd_middleware_factory(app, handler):
-    """Measure application params with statsd."""
+    """Send the application stats to statsd."""
     @coroutine
     def middleware(request):
-        """Send results to statsd."""
-        with Timer() as timer:
+        """Send stats to statsd."""
+        timer = Timer()
+        timer.start()
+
+        statsd = yield from app.ps.metrics.client()
+        pipe = statsd.pipe()
+        pipe.incr('request.method.%s' % request.method)
+
+        try:
             response = yield from handler(request)
+            pipe.incr('response.status.%s' % response.status)
+            return response
 
-        with (yield from app.ps.metrics.client()) as client:
-            client.incr('request.method.%s' % request.method)
-            client.timing('response.time', timer.ms)
-            client.incr('response.status.%s' % response.status)
+        except HTTPException as exc:
+            pipe.incr('response.status.%s' % exc.status_code)
+            raise
 
-        return response
+        except Exception:
+            pipe.incr('response.exception')
+            raise
+
+        finally:
+            timer.stop()
+            pipe.timing('response.time', timer.ms)
+            pipe.disconnect()
 
     return middleware
 
@@ -103,16 +119,17 @@ class AbstractClient:
         self.transport = self.connected = None
         self.pipeline = None
 
-    def __enter__(self):
+    def pipe(self):
         """Enter to context."""
         self.pipeline = []
         return self
+
+    __enter__ = pipe
 
     def __exit__(self, typ, value, tb):
         """Exit from context."""
         if value:
             raise
-        self._send(*self.pipeline)
         self.disconnect()
 
     def connect(self):
@@ -121,6 +138,8 @@ class AbstractClient:
 
     def disconnect(self):
         """Disconnect from the socket."""
+        if self.pipeline:
+            self._send(*self.pipeline)
         self.transport.close()
         self.transport = self.pipeline = None
 
@@ -251,16 +270,21 @@ class Timer:
         """Initialize timer."""
         self.ms = None
 
-    def __enter__(self):
-        """Enter to context."""
+    def start(self):
+        """Start the timer."""
         self.ms = None
         self._start = time()
         return self
+
+    __enter__ = start
+
+    def stop(self):
+        """Stop the timer."""
+        dd = time() - self._start
+        self.ms = int(round(1000 * dd))
 
     def __exit__(self, typ, value, tb):
         """Exit from context."""
         if value:
             raise
-        dd = time() - self._start
-        self.ms = int(round(1000 * dd))
-        return self
+        self.stop()

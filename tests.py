@@ -28,6 +28,10 @@ def app(loop):
     def view(request):
         return 'OK'
 
+    @app.register('/redirect')
+    def redirect(request):
+        raise muffin.HTTPFound('/')
+
     return app
 
 
@@ -113,4 +117,11 @@ def test_statsd_middleware(client):
         response = client.get('/')
 
     assert response.status_code == 200
-    assert transport.sendto.call_args[0][0] == b'muffin.request.method.GET:1|c\nmuffin.response.time:0|ms\nmuffin.response.status.200:1|c\n' # noqa
+    assert transport.sendto.call_count == 1
+    assert transport.sendto.call_args[0][0] == b'muffin.request.method.GET:1|c\nmuffin.response.status.200:1|c\nmuffin.response.time:0|ms\n' # noqa
+
+    with mock.patch.object(muffin_metrics.UDPStatsdClient, 'connect', connect):
+        response = client.get('/redirect')
+
+    assert transport.sendto.call_count == 2
+    assert transport.sendto.call_args[0][0] == b'muffin.request.method.GET:1|c\nmuffin.response.status.302:1|c\nmuffin.response.time:0|ms\n' # noqa
