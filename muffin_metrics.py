@@ -53,7 +53,7 @@ def statsd_middleware_factory(app, handler):
 
 class Plugin(BasePlugin):
 
-    """ Connect to Async Mongo. """
+    """Connect to Async Mongo."""
 
     name = 'metrics'
     defaults = {
@@ -64,6 +64,20 @@ class Plugin(BasePlugin):
         'prefix': 'muffin.',
     }
 
+    def __init__(self, *args, **kwargs):
+        """Initialize the plugin."""
+        self.enabled = True
+        self.default = None
+        self.backends_hash = {}
+        self.backends_schemas = {
+            'null': NullClient,
+            'tcp': TCPClient,
+            'udp': UDPClient,
+            'tcp+statsd': TCPStatsdClient,
+            'udp+statsd': UDPStatsdClient,
+        }
+        super(Plugin, self).__init__(*args, **kwargs)
+
     def setup(self, app):
         """Parse and prepare the plugin's configuration."""
         super().setup(app)
@@ -71,28 +85,25 @@ class Plugin(BasePlugin):
         self.enabled = len(self.cfg.backends)
 
         self.default = self.cfg.default
-        if not self.cfg.default and self.enabled:
+        if not self.default and self.enabled:
             self.default = self.cfg.backends[0][0]
 
         self.backends_hash = {name: parse.urlparse(loc) for (name, loc) in self.cfg.backends}
-        self.backends_schemas = {
-            'tcp': TCPClient,
-            'udp': UDPClient,
-            'tcp+statsd': TCPStatsdClient,
-            'udp+statsd': UDPStatsdClient,
-        }
-        if self.default not in self.backends_hash:
+        if self.default and self.default not in self.backends_hash:
             raise PluginException('Backend not found: %s' % self.default)
 
     @coroutine
     def client(self, name=None):
         """Initialize a backend's client with given name or default."""
         name = name or self.default
+        if not name:
+            return NullClient(self, None, None)
         params = self.backends_hash[name]
         ccls = self.backends_schemas.get(params.scheme, TCPClient)
         return (yield from ccls(self, params.hostname, params.port).connect())
 
-    def time(self):
+    @staticmethod
+    def time():
         """Create and return a simple timer."""
         return Timer()
 
@@ -134,7 +145,7 @@ class AbstractClient:
 
     def connect(self):
         """ Connect to socket. """
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def disconnect(self):
         """Disconnect from the socket."""
@@ -163,7 +174,21 @@ class AbstractClient:
 
     def _send(self, *messages):
         """Send message."""
-        raise NotImplemented()
+        raise NotImplementedError()
+
+
+class NullClient(AbstractClient):
+
+    """Do nothing."""
+
+    @coroutine
+    def connect(self):
+        """Do nothing."""
+        return self
+
+    def _send(self, *messages):
+        """Do nothing."""
+        return False
 
 
 class UDPClient(AbstractClient):
@@ -174,7 +199,7 @@ class UDPClient(AbstractClient):
     def connect(self):
         """Connect to socket."""
         self.transport, _ = yield from self.parent.app.loop.create_datagram_endpoint(
-            lambda: DatagramProtocol(), remote_addr=(self.hostname, self.port))
+            DatagramProtocol, remote_addr=(self.hostname, self.port))
         return self
 
     def _send(self, *messages):
@@ -268,7 +293,7 @@ class Timer:
 
     def __init__(self):
         """Initialize timer."""
-        self.ms = None
+        self.ms = self._start = None
 
     def start(self):
         """Start the timer."""
