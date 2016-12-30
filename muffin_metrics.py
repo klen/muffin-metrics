@@ -177,20 +177,6 @@ class AbstractClient:
         raise NotImplementedError()
 
 
-class NullClient(AbstractClient):
-
-    """Do nothing."""
-
-    @coroutine
-    def connect(self):
-        """Do nothing."""
-        return self
-
-    def _send(self, *messages):
-        """Do nothing."""
-        return False
-
-
 class UDPClient(AbstractClient):
 
     """Send messages to graphite backend by UDP."""
@@ -275,6 +261,20 @@ class StatsDMixin:
     def build_message(self, stat, value):
         """Build metric for StatsD."""
         return "%s%s:%s" % (self.prefix, stat, value)
+
+
+class NullClient(AbstractClient, StatsDMixin):
+
+    """Do nothing."""
+
+    @coroutine
+    def connect(self):
+        """Do nothing."""
+        return self
+
+    def _send(self, *messages):
+        """Do nothing."""
+        return False
 
 
 class UDPStatsdClient(StatsDMixin, UDPClient):
