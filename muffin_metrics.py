@@ -276,6 +276,12 @@ class NullClient(AbstractClient, StatsDMixin):
         """Do nothing."""
         return False
 
+    def disconnect(self):
+        """Disconnect from the socket."""
+        if self.pipeline:
+            self._send(*self.pipeline)
+        self.pipeline = None
+
 
 class UDPStatsdClient(StatsDMixin, UDPClient):
 

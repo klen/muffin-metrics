@@ -19,6 +19,7 @@ def app(loop):
             ('statsd', 'udp+statsd://127.0.0.1:9999'),
             ('udp', 'udp://127.0.0.1:9999'),
             ('tcp', 'tcp://127.0.0.1:9999'),
+            ('null', 'null://127.0.0.1:9999'),
         )
     )
 
@@ -125,3 +126,11 @@ def test_statsd_middleware(client):
 
     assert transport.sendto.call_count == 2
     assert transport.sendto.call_args[0][0] == b'muffin.request.method.GET:1|c\nmuffin.response.status.302:1|c\nmuffin.response.time:0|ms\n' # noqa
+
+
+@pytest.mark.async
+def test_null(app, client):
+    client = yield from app.ps.metrics.client('null')
+    yield from client.connect()
+    with client:
+        client.send('test', '12345')
