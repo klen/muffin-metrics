@@ -11,7 +11,7 @@ from muffin.plugins import BasePlugin, PluginException
 # Package information
 # ===================
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __project__ = "muffin-metrics"
 __author__ = "Kirill Klenov <horneds@gmail.com>"
 __license__ = "MIT"
